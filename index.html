@@ -17772,22 +17772,30 @@ async function generateAIPlan(context) {
       ).join('\n')}\nThe macro targets below have already had these staple meals subtracted. Only generate the REMAINING meals.`
     : '';
 
-  // Build dynamic day-type and training-focus lines from the user's actual confirmed plan
+  // Build dynamic day-type and training-focus lines from the user's actual plan
   const dayNames7 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const dayNamesFull = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const weekKeyForPlan = getWeekKey();
   const confirmedPlanData = (nutrPlanConfirmed[currentProfile] || {})[weekKeyForPlan];
   const activePlanForMeal = getActivePlan(currentProfile);
 
-  // Determine day types: prefer confirmed nutrition plan training days, fall back to active workout plan schedule
+  // Resolve effective training days: confirmed plan → in-progress planner state → static schedule
+  const plannerStateForMeal = nutrPlannerState[currentProfile];
+  const plannerWeekKeyForMeal = plannerStateForMeal?.weekStart ? getWeekKey(new Date(plannerStateForMeal.weekStart)) : null;
+  const inProgressMealDays = (!confirmedPlanData?.confirmed && plannerWeekKeyForMeal === weekKeyForPlan && plannerStateForMeal?.trainingDays)
+    ? plannerStateForMeal.trainingDays : null;
+  const effectiveMealTrainingDays = confirmedPlanData?.confirmed
+    ? (confirmedPlanData.trainingDays || [])
+    : inProgressMealDays;
+
+  // Determine day types
   let dayTypeMap = {}; // 0-6 index → 'training'|'recovery'|'cardio'|'rest'
-  if (confirmedPlanData && confirmedPlanData.trainingDays && confirmedPlanData.trainingDays.length) {
-    // User explicitly set training days in the week planner
+  if (effectiveMealTrainingDays !== null) {
+    // User explicitly set training days in the week planner (confirmed or in-progress)
     for (let i = 0; i < 7; i++) {
-      if (confirmedPlanData.trainingDays.includes(i)) {
+      if (effectiveMealTrainingDays.includes(i)) {
         dayTypeMap[i] = 'training';
       } else {
-        // Check if the active plan marks this day as cardio
         const schedDay = activePlanForMeal && activePlanForMeal.schedule
           ? activePlanForMeal.schedule.find(d => d.day === dayNames7[i])
           : null;
@@ -17813,17 +17821,21 @@ async function generateAIPlan(context) {
 
   const dayTypeLine = dayNames7.map((d, i) => `${d}=${dayTypeMap[i] || 'rest'}`).join(', ');
 
-  // Build training-day focus line from active plan session names
+  // Build training-day focus line using positional mapping (same logic as workout tab)
+  // Nth training day in the week → Nth training session from the plan
   const focusParts = [];
   if (activePlanForMeal && activePlanForMeal.schedule) {
-    activePlanForMeal.schedule.forEach((d, i) => {
-      if (dayTypeMap[i] === 'training') {
-        const sessionName = d.name || d.workoutName || d.day || dayNamesFull[i];
-        focusParts.push(`${dayNames7[i]}=${sessionName}`);
-      }
+    const planTrainingSessionsForMeal = activePlanForMeal.schedule.filter(d => d.type === 'training');
+    const sortedTrainingDaysForMeal = Object.keys(dayTypeMap)
+      .filter(i => dayTypeMap[i] === 'training')
+      .map(Number)
+      .sort((a, b) => a - b);
+    sortedTrainingDaysForMeal.forEach((dayIdx, position) => {
+      const session = planTrainingSessionsForMeal[position % planTrainingSessionsForMeal.length];
+      const sessionName = session?.name || 'Training';
+      focusParts.push(`${dayNames7[dayIdx]}=${sessionName}`);
     });
   } else {
-    // No plan — generic labels
     Object.keys(dayTypeMap).forEach(i => {
       if (dayTypeMap[i] === 'training') focusParts.push(`${dayNames7[i]}=Training`);
     });
@@ -18103,12 +18115,22 @@ function getWorkoutForDayFromPlan(profile, dayIdx) {
   // This lets users pick any days (e.g. Tue-Fri) and get Push/Pull/Legs in correct order
   // rather than being locked to the plan's default Mon/Tue/Wed assignments.
   const confirmedWeek = (nutrPlanConfirmed[profile] || {})[weekKey];
-  if (confirmedWeek?.confirmed) {
-    const confirmedTrainingDays = confirmedWeek.trainingDays || [];
-    const sortedTrainingDays = [...confirmedTrainingDays].sort((a, b) => a - b);
+
+  // Also check in-progress planner state (same week, not yet confirmed)
+  const plannerState = nutrPlannerState[profile];
+  const plannerWeekKey = plannerState?.weekStart ? getWeekKey(new Date(plannerState.weekStart)) : null;
+  const inProgressDays = (!confirmedWeek?.confirmed && plannerWeekKey === weekKey && plannerState?.trainingDays)
+    ? plannerState.trainingDays : null;
+
+  const effectiveTrainingDays = confirmedWeek?.confirmed
+    ? (confirmedWeek.trainingDays || [])
+    : inProgressDays;
+
+  if (effectiveTrainingDays !== null) {
+    const sortedTrainingDays = [...effectiveTrainingDays].sort((a, b) => a - b);
     const positionInWeek = sortedTrainingDays.indexOf(effectiveDayIdx);
     if (positionInWeek === -1) {
-      // This day is not a training day in the confirmed plan — rest day
+      // This day is not a training day — rest day
       return null;
     }
     // Get the Nth training session from the plan (in the order they appear in the schedule)
