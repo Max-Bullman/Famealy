@@ -1603,7 +1603,7 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
     </div>
 
     <!-- Mode toggle -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:16px">
+    <div id="adhoc-mode-toggle" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:16px">
       <button id="adhoc-tab-manual" onclick="setAdhocMode('manual')"
         style="padding:8px;border-radius:8px;border:1px solid var(--active);background:var(--max-light);color:#000;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">
         ✏️ Manual
@@ -6687,11 +6687,21 @@ function openAdhocMealModal() {
   window._adhocScanItems = [];
   const btn = document.getElementById('adhoc-save-btn');
   if (btn) btn.style.background = PROFILES[currentProfile].color || 'var(--active)';
+  // Hide AI describe tab for free users
+  const aiTab = document.getElementById('adhoc-tab-ai');
+  if (aiTab) aiTab.style.display = isAIUser() ? '' : 'none';
+  const toggleGrid = document.getElementById('adhoc-mode-toggle');
+  if (toggleGrid) toggleGrid.style.gridTemplateColumns = isAIUser() ? '1fr 1fr 1fr' : '1fr 1fr';
   setAdhocMode('manual');
   document.getElementById('adhoc-meal-modal').classList.add('open');
 }
 
 function setAdhocMode(mode) {
+  // AI describe tab only available to paid users
+  if (mode === 'ai' && !isAIUser()) {
+    showToast('✨ AI meal description is a Standard AI feature — add your API key in Settings');
+    return;
+  }
   const tabs = ['manual','ai','scan'];
   const accent = PROFILES[currentProfile].color || 'var(--active)';
   tabs.forEach(t => {
@@ -6780,6 +6790,10 @@ function removeScanItem(i) {
 }
 
 async function estimateAdhocWithAI() {
+  if (!isAIUser()) {
+    showToast('✨ AI meal description is a Standard AI feature — add your API key in Settings');
+    return;
+  }
   var desc = (document.getElementById('adhoc-ai-desc').value || '').trim();
   if (!desc) { showToast('Describe what you ate first'); return; }
   var apiKey = getApiKey();
@@ -10561,12 +10575,10 @@ function openWorkoutSummary(wKey) {
         '</div>' +
       '</div>' +
 
-      (apiKey ?
-        '<div id="session-ai-assessment" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;font-size:0.82rem;line-height:1.7;color:var(--muted)">' +
-          '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--active);font-weight:700;margin-bottom:6px">🧠 Coach Assessment</div>' +
-          '<div id="session-ai-text">Analysing your session\u2026</div>' +
-        '</div>'
-      : '') +
+      '<div id="session-ai-assessment" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;font-size:0.82rem;line-height:1.7;color:var(--muted)">' +
+        '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--active);font-weight:700;margin-bottom:6px">🧠 Session Feedback</div>' +
+        '<div id="session-ai-text">Reviewing your session\u2026</div>' +
+      '</div>' +
 
       '<textarea id="workout-notes-input" placeholder="Session notes (optional)..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:0.85rem;color:var(--text);font-family:var(--font-body);min-height:70px;resize:none;box-sizing:border-box;margin-bottom:12px"></textarea>' +
       '<button id="save-workout-btn" style="width:100%;padding:13px;background:var(--max-light);color:#000;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-bottom:8px">Save workout</button>' +
@@ -10618,9 +10630,13 @@ function openWorkoutSummary(wKey) {
 
   document.body.appendChild(overlay);
 
-  // Fire AI assessment in background if key exists or free credits available
-  if (exerciseLines.length && (apiKey || checkAICredits('session_assessment', false))) {
-    generateSessionAssessment(apiKey, workout, exerciseLines, totalVolume, avgRpe, exCompleted);
+  // Always show session feedback — AI for paid users, rule-based for free
+  if (exerciseLines.length) {
+    if (apiKey || checkAICredits('session_assessment', false)) {
+      generateSessionAssessment(apiKey, workout, exerciseLines, totalVolume, avgRpe, exCompleted);
+    } else {
+      generateRuleBasedSessionFeedback(workout, totalVolume, avgRpe, exCompleted);
+    }
   }
 }
 
@@ -10741,19 +10757,73 @@ async function generateAIRecovery() {
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error?.message || 'API error ' + response.status);
     const text = data.content?.[0]?.text || 'Unable to generate brief.';
     result.innerHTML = '<div style="line-height:1.7;color:var(--text)">' + text.replace(/\n\n/g, '</div><div style="margin-top:10px;line-height:1.7;color:var(--text)">').replace(/\n/g, '<br>') + '</div>';
     btn.textContent = '✨ Regenerate';
     btn.disabled = false;
   } catch(e) {
-    result.textContent = 'Error generating brief. Check your API key in Settings.';
+    result.textContent = '⚠️ ' + (e.message || 'Error generating brief — check your API key in Settings.');
     btn.textContent = '✨ Try again';
     btn.disabled = false;
   }
+}
+
+function generateRuleBasedSessionFeedback(workout, totalVolume, avgRpe, exCompleted) {
+  var textEl = document.getElementById('session-ai-text');
+  if (!textEl) return;
+
+  var total = workout.exercises ? workout.exercises.length : 0;
+  var completionPct = total > 0 ? Math.round((exCompleted / total) * 100) : 100;
+  var messages = [];
+
+  // Completion feedback
+  if (completionPct === 100) {
+    messages.push('Full session completed — every exercise done. Consistency like this compounds over time.');
+  } else if (completionPct >= 75) {
+    messages.push('Strong effort — ' + exCompleted + ' of ' + total + ' exercises completed. A near-complete session still delivers most of the stimulus.');
+  } else if (completionPct >= 50) {
+    messages.push(exCompleted + ' of ' + total + ' exercises completed. Half a session is better than none — note what cut it short for next time.');
+  } else {
+    messages.push('Session cut short at ' + exCompleted + ' of ' + total + ' exercises. Recovery, time, or energy — worth reflecting on what got in the way.');
+  }
+
+  // RPE feedback
+  if (avgRpe) {
+    if (avgRpe <= 6) {
+      messages.push('Average RPE ' + avgRpe + ' — session felt well within your capacity. Consider adding a little weight or volume next time if you felt this easy throughout.');
+    } else if (avgRpe <= 7.5) {
+      messages.push('Average RPE ' + avgRpe + ' — solid working effort. This is the sweet spot for sustainable progress.');
+    } else if (avgRpe <= 8.5) {
+      messages.push('Average RPE ' + avgRpe + ' — high intensity session. Prioritise recovery today: protein, sleep, and keep activity light.');
+    } else {
+      messages.push('Average RPE ' + avgRpe + ' — that was a hard push. Make sure you\'re eating enough today and sleeping well tonight. Back off slightly next session if needed.');
+    }
+  }
+
+  // Volume feedback
+  if (totalVolume > 0) {
+    messages.push('Total volume: ' + Math.round(totalVolume) + 'kg moved. Track this number week to week — consistent volume progression is the clearest sign of growth.');
+  }
+
+  // Upsell nudge
+  var upsellHtml = '<div style="margin-top:12px;padding:10px 12px;background:rgba(var(--active-rgb,45,106,79),0.07);border:1px solid rgba(var(--active-rgb,45,106,79),0.2);border-radius:8px;font-size:0.75rem;color:var(--muted);line-height:1.5">'
+    + '🧠 <b style="color:var(--text)">Want deeper feedback?</b> Your AI coach reviews your actual weights, RPE per set and progression trends — and tells you exactly what to adjust next session. '
+    + '<span style="color:var(--active);cursor:pointer;font-weight:700" onclick="showPage(\'settings\',document.querySelectorAll(\'.nav-item\')[6])">Add your API key →</span>'
+    + '</div>';
+
+  textEl.innerHTML = messages.map(function(m) {
+    return '<div style="margin-bottom:8px;color:var(--text)">' + m + '</div>';
+  }).join('') + upsellHtml;
 }
 
 async function generateSessionAssessment(apiKey, workout, exerciseLines, totalVolume, avgRpe, exCompleted) {
@@ -12791,12 +12861,13 @@ async function sendCoachMessage() {
   if (!question) return;
 
   const apiKey = getApiKey();
+  if (!isPremiumAI()) {
+    convo.innerHTML += `<div class="coach-msg-ai" style="color:var(--muted);font-size:0.78rem">🔒 The exercise coach is a Premium AI feature. <span style="color:var(--active);cursor:pointer;font-weight:700" onclick="showPage('settings',document.querySelectorAll('.nav-item')[6])">Upgrade →</span></div>`;
+    return;
+  }
   if (!apiKey) {
-    if (!checkAICredits('exercise_coach', false)) {
-      showOutOfCreditsPrompt('the Exercise Coach');
-      return;
-    }
-    convo.innerHTML += `<div class="coach-msg-ai" style="color:var(--muted);font-size:0.78rem">⚡ ${freeGenCredits} free generation${freeGenCredits !== 1 ? 's' : ''} remaining</div>`;
+    convo.innerHTML += `<div class="coach-msg-ai" style="color:var(--muted);font-size:0.78rem">Add your API key in Settings to use the exercise coach.</div>`;
+    return;
   }
 
   // Hide quick prompts once conversation starts
@@ -20754,18 +20825,22 @@ function renderWorkoutFromPlan(idx) {
   const displayName = (effectiveWorkout2 && effectiveWorkout2.name) ? effectiveWorkout2.name : workout.name;
   subtitle.textContent = displayName + '  ·  ~' + estMins + ' min';
 
-  // Pre-session coach button
+  // Pre-session coach button — Premium AI only
   const preSessionBtn = document.getElementById('pre-session-coach-btn');
   if (preSessionBtn) {
-    const existingLogs2 = workoutLogs[wKey] || {};
-    const sessionStarted = workout.exercises.some(function(_, ei) {
-      const exLogs = existingLogs2[ei] || {};
-      return Object.keys(exLogs).filter(function(k){ return !isNaN(k); }).some(function(si){
-        return exLogs[si].done || exLogs[si].weight || exLogs[si].reps;
+    if (!isPremiumAI()) {
+      preSessionBtn.style.display = 'none';
+    } else {
+      const existingLogs2 = workoutLogs[wKey] || {};
+      const sessionStarted = workout.exercises.some(function(_, ei) {
+        const exLogs = existingLogs2[ei] || {};
+        return Object.keys(exLogs).filter(function(k){ return !isNaN(k); }).some(function(si){
+          return exLogs[si].done || exLogs[si].weight || exLogs[si].reps;
+        });
       });
-    });
-    preSessionBtn.style.display = sessionStarted ? 'none' : '';
-    preSessionBtn.onclick = function() { openPreSessionCoach(currentDayIdx); };
+      preSessionBtn.style.display = sessionStarted ? 'none' : '';
+      preSessionBtn.onclick = function() { openPreSessionCoach(currentDayIdx); };
+    }
   }
 
   // Move button
@@ -20893,7 +20968,7 @@ function renderWorkoutFromPlan(idx) {
         <button onclick="event.stopPropagation();_showExInfo(this)" data-exname="${exNameEsc}" data-exnote="${(ex.note||'').replace(/"/g,'&quot;')}"
           style="width:24px;height:24px;background:none;border:1px solid var(--border);border-radius:6px;font-size:0.75rem;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="How to do this exercise">&#x2139;&#xFE0F;</button>
         <button onclick="event.stopPropagation();openExerciseCoach('${exNameEsc}')"
-          style="width:24px;height:24px;background:rgba(var(--active-rgb,45,106,79),0.15);border:1px solid rgba(var(--active-rgb,45,106,79),0.4);border-radius:6px;font-size:0.72rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="AI Coach">&#x1F916;</button>
+          style="width:24px;height:24px;background:rgba(var(--active-rgb,45,106,79),0.15);border:1px solid rgba(var(--active-rgb,45,106,79),0.4);border-radius:6px;font-size:0.72rem;cursor:pointer;display:${isPremiumAI() ? 'flex' : 'none'};align-items:center;justify-content:center;flex-shrink:0" title="AI Coach">&#x1F916;</button>
         <button onclick="event.stopPropagation();openExerciseSwap('${wKey}',${ei})"
           style="width:24px;height:24px;background:none;border:1px solid var(--border);border-radius:6px;font-size:0.72rem;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Swap exercise">&#x21BB;</button>
         <div class="exercise-card-expand-btn" onclick="toggleExerciseCard('${wKey}',${ei})">${isExpanded ? '▲' : '▼'}</div>
@@ -20905,7 +20980,7 @@ function renderWorkoutFromPlan(idx) {
     // Expanded full card
     return collapsedHeader + `<div class="exercise-card${exSt.completed ? ' complete' : ''}" style="border-top:none;border-radius:0 0 var(--radius) var(--radius);margin-top:-10px;padding-top:14px">
       <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
-        <button onclick="openExerciseCoach('${exNameEsc}');event.stopPropagation()" class="ai-feature-btn" style="border-radius:6px;padding:4px 12px;font-size:0.68rem;font-weight:700;cursor:pointer;white-space:nowrap">Coach</button>
+        ${isPremiumAI() ? `<button onclick="openExerciseCoach('${exNameEsc}');event.stopPropagation()" class="ai-feature-btn" style="border-radius:6px;padding:4px 12px;font-size:0.68rem;font-weight:700;cursor:pointer;white-space:nowrap">Coach</button>` : ''}
       </div>
       ${ex.note ? '<div class="exercise-note">' + ex.note + '</div>' : ''}
       ${progHtml}
