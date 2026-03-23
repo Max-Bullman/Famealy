@@ -144,14 +144,15 @@ a { -webkit-tap-highlight-color: transparent; }
 
 /* NAV */
 .bottom-nav { flex-shrink: 0; width: 100%; background: rgba(6,6,8,0.96); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border-top: 1px solid var(--border); display: flex; padding: 6px env(safe-area-inset-right, 0px) calc(env(safe-area-inset-bottom, 0px) + 6px) env(safe-area-inset-left, 0px); z-index: 100; margin-top: auto; position: relative; }
-.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 6px; cursor: pointer; transition: all 0.2s; opacity: 0.28; position: relative; min-height: 52px; justify-content: center; }
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 6px; cursor: pointer; transition: all 0.2s; opacity: 1; position: relative; min-height: 52px; justify-content: center; }
 .nav-item.active { opacity: 1; }
 .nav-item.active::before { content:''; position:absolute; top:0; left:50%; transform:translateX(-50%); width:24px; height:2px; border-radius:0 0 3px 3px; background:var(--active); box-shadow: 0 0 10px var(--active), 0 0 20px rgba(0,255,135,0.3); }
 .nav-item.active::after { display:none; }
 .max-theme .nav-item.active .nav-icon { color: var(--max-light); }
 .kirsty-theme .nav-item.active .nav-icon { color: var(--kirsty-light); }
-.nav-icon { font-size: 1.55rem; line-height: 1; }
-.nav-label { font-size: 0.63rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--subtle); }
+.nav-icon { font-size: 1.55rem; line-height: 1; opacity: 0.5; }
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-label { font-size: 0.63rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
 .max-theme .nav-item.active .nav-label { color: var(--max-light); }
 .kirsty-theme .nav-item.active .nav-label { color: var(--kirsty-light); }
 
@@ -1552,6 +1553,47 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
 </div>
 
 <!-- ADHOC MEAL MODAL -->
+<div class="modal-overlay" id="staple-scan-modal" style="display:none">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="modal-title" style="margin-bottom:0">Build staple meal</div>
+      <button class="modal-close" onclick="closeStapleScanBuilder()">✕</button>
+    </div>
+    <div style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Scan or search each ingredient. Adjust quantities, then give the combined meal a name and save it as a staple.</div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="ssb-search-input" placeholder="Search a product..." style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:0.82rem;color:var(--text);font-family:var(--font-body)" onkeydown="if(event.key==='Enter')ssbSearch()">
+      <button onclick="ssbSearch()" style="padding:9px 12px;border-radius:8px;background:var(--max-light);color:#000;border:none;font-size:0.82rem;font-weight:700;cursor:pointer">Search</button>
+      <button onclick="scanBarcode(b=>ssbScanBarcode(b))" style="padding:9px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:1rem;cursor:pointer" title="Scan barcode">📷</button>
+    </div>
+    <div id="ssb-search-results" style="margin-bottom:10px"></div>
+    <div id="ssb-items" style="margin-bottom:10px"></div>
+    <div id="ssb-totals" style="display:none;background:var(--surface2);border:1px solid rgba(0,255,135,0.2);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Combined totals</div>
+      <div id="ssb-totals-text" style="font-size:0.9rem;font-weight:700;color:var(--text)"></div>
+    </div>
+
+    <div style="margin-bottom:8px">
+      <div style="font-size:0.68rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Meal name *</div>
+      <input id="ssb-name" placeholder="e.g. Chocolate PB Shake" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.84rem;color:var(--text);font-family:var(--font-body);box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:0.68rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Meal slot</div>
+      <select id="ssb-mealtype" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.84rem;color:var(--text);font-family:var(--font-body)">
+        <option value="">— Select slot —</option>
+        <option value="Breakfast">Breakfast</option>
+        <option value="Lunch">Lunch</option>
+        <option value="Snack">Snack</option>
+        <option value="Dinner">Dinner</option>
+        <option value="Pre-Bed">Pre-Bed</option>
+        <option value="Pre-Workout">Pre-Workout</option>
+      </select>
+    </div>
+    <button onclick="saveStapleScanBuilder()" style="width:100%;padding:13px;border-radius:10px;background:var(--max-light);color:#000;border:none;font-size:0.92rem;font-weight:700;cursor:pointer;font-family:var(--font-head)">+ Save as staple</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="adhoc-meal-modal">
   <div class="modal" style="max-height:90vh;overflow-y:auto">
     <div class="modal-handle"></div>
@@ -1561,7 +1603,7 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
     </div>
 
     <!-- Mode toggle -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:16px">
       <button id="adhoc-tab-manual" onclick="setAdhocMode('manual')"
         style="padding:8px;border-radius:8px;border:1px solid var(--active);background:var(--max-light);color:#000;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">
         ✏️ Manual
@@ -1569,6 +1611,10 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
       <button id="adhoc-tab-ai" onclick="setAdhocMode('ai')"
         style="padding:8px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:0.8rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">
         ✨ Describe it
+      </button>
+      <button id="adhoc-tab-scan" onclick="setAdhocMode('scan')"
+        style="padding:8px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:0.8rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">
+        📷 Scan
       </button>
     </div>
 
@@ -1609,6 +1655,22 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
         ✨ Estimate nutrition
       </button>
       <div id="adhoc-ai-result"></div>
+    </div>
+
+    <!-- Scan section -->
+    <div id="adhoc-scan-section" style="display:none">
+      <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Scan one or more barcodes — totals add up automatically. Give the meal a name then tap Add.</div>
+      <button onclick="scanBarcode(b=>addScannedItemToMeal(b))"
+        style="width:100%;padding:12px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);font-size:0.9rem;font-weight:700;color:var(--text);cursor:pointer;margin-bottom:12px">
+        📷 Scan a barcode
+      </button>
+      <div id="adhoc-scan-items" style="margin-bottom:12px"></div>
+      <div id="adhoc-scan-totals" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.82rem">
+        <div style="font-weight:700;margin-bottom:4px;color:var(--text)">Total</div>
+        <div id="adhoc-scan-totals-text" style="color:var(--muted)"></div>
+      </div>
+      <div class="pref-label">Meal name</div>
+      <input id="adhoc-scan-name" class="recipe-input" placeholder="e.g. Post-workout shake" style="margin-bottom:4px">
     </div>
 
     <button id="adhoc-save-btn" onclick="saveAdhocMeal()"
@@ -2437,7 +2499,9 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
             <button class="meal-lib-tab" onclick="setMealLibTab('shake',this)">Shakes</button>
           </div>
           <input id="meal-lib-search" type="text" placeholder="Search meals…" oninput="renderMealLibrary()"
-            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:0.84rem;color:var(--text);font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:0.84rem;color:var(--text);font-family:var(--font-body);box-sizing:border-box;margin-bottom:8px">
+          <button onclick="verifyMealLibraryMacros()" style="width:100%;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:0.78rem;font-weight:700;color:var(--muted);cursor:pointer;margin-bottom:10px">🔍 Verify macros against Open Food Facts</button>
+          <div id="verify-macros-results" style="margin-bottom:10px"></div>
           <div id="meal-library-content"></div>
         </div>
       </div>
@@ -2596,6 +2660,24 @@ body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; fle
         <div class="accordion-body">
           <p style="font-size:0.78rem;color:var(--muted);margin-top:10px;margin-bottom:12px;line-height:1.5">Daily fixed meals the planner works around, plus shopping list reset.</p>
           <div id="staple-meals-list"></div>
+
+        <!-- Product search -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:6px;color:var(--text)">🔍 Search product (Open Food Facts)</div>
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <input id="staple-search-input" placeholder="e.g. Optimum Nutrition Gold Standard Whey" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:0.82rem;color:var(--text);font-family:var(--font-body)" onkeydown="if(event.key==='Enter')searchStapleProduct()">
+            <button onclick="searchStapleProduct()" style="padding:9px 14px;border-radius:8px;background:var(--max-light);color:#000;border:none;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Search</button>
+            <button onclick="scanBarcode(b=>lookupBarcode(b,fillStapleFromProduct))" title="Scan barcode" style="padding:9px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:1rem;cursor:pointer" title="Scan barcode">📷</button>
+          </div>
+          <div id="staple-search-results" style="margin-top:8px"></div>
+        </div>
+
+        <!-- Multi-scan staple builder -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:4px;color:var(--text)">📷 Build staple from multiple scans</div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px">Scan each ingredient (e.g. whey, peanut butter, oats) — totals combine into one staple.</div>
+          <button onclick="openStapleScanBuilder()" style="width:100%;padding:9px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:0.82rem;font-weight:700;color:var(--text);cursor:pointer">📷 Start scanning ingredients</button>
+        </div>
 
         <!-- AI quick-add -->
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
@@ -4986,7 +5068,10 @@ function getMealLibraryContext(profile, weeklyBudgetGBP) {
     const favFlag = m.favourite ? ' ⭐FAVOURITE' : '';
     const userFlag = m._userOwned ? ' [YOUR MEAL]' : '';
     const cost = m.cost_p ? `~£${(m.cost_p/100).toFixed(2)}` : 'n/a';
-    return `  - ${m.name}${userFlag}${favFlag} | ${m.calories||'?'}kcal | ${m.protein||'?'}g prot | ${cost}`;
+    const carbs = m.carbs !== undefined ? `${m.carbs}g carbs` : '';
+    const fat   = m.fat   !== undefined ? `${m.fat}g fat`     : '';
+    const macroStr = [m.protein !== undefined ? `${m.protein}g prot` : '?g prot', carbs, fat].filter(Boolean).join(' | ');
+    return `  - ${m.name}${userFlag}${favFlag} | ${m.calories||'?'}kcal | ${macroStr} | ${cost}`;
   }).join('\n');
 
   return `
@@ -6596,6 +6681,10 @@ function openAdhocMealModal() {
   document.getElementById('adhoc-fat').value = '';
   document.getElementById('adhoc-ai-desc').value = '';
   document.getElementById('adhoc-ai-result').innerHTML = '';
+  document.getElementById('adhoc-scan-items').innerHTML = '';
+  document.getElementById('adhoc-scan-totals').style.display = 'none';
+  if (document.getElementById('adhoc-scan-name')) document.getElementById('adhoc-scan-name').value = '';
+  window._adhocScanItems = [];
   const btn = document.getElementById('adhoc-save-btn');
   if (btn) btn.style.background = PROFILES[currentProfile].color || 'var(--active)';
   setAdhocMode('manual');
@@ -6603,30 +6692,91 @@ function openAdhocMealModal() {
 }
 
 function setAdhocMode(mode) {
-  const manualTab = document.getElementById('adhoc-tab-manual');
-  const aiTab     = document.getElementById('adhoc-tab-ai');
-  const manualSec = document.getElementById('adhoc-manual-section');
-  const aiSec     = document.getElementById('adhoc-ai-section');
-  const accent    = PROFILES[currentProfile].color || 'var(--active)';
-  if (mode === 'manual') {
-    manualTab.style.background = accent;
-    manualTab.style.borderColor = accent;
-    manualTab.style.color = '#fff';
-    aiTab.style.background = 'none';
-    aiTab.style.borderColor = 'var(--border)';
-    aiTab.style.color = 'var(--muted)';
-    manualSec.style.display = 'block';
-    aiSec.style.display = 'none';
-  } else {
-    aiTab.style.background = accent;
-    aiTab.style.borderColor = accent;
-    aiTab.style.color = '#fff';
-    manualTab.style.background = 'none';
-    manualTab.style.borderColor = 'var(--border)';
-    manualTab.style.color = 'var(--muted)';
-    manualSec.style.display = 'none';
-    aiSec.style.display = 'block';
+  const tabs = ['manual','ai','scan'];
+  const accent = PROFILES[currentProfile].color || 'var(--active)';
+  tabs.forEach(t => {
+    const tab = document.getElementById('adhoc-tab-' + t);
+    const sec = document.getElementById('adhoc-' + t + '-section');
+    const isActive = t === mode;
+    if (tab) {
+      tab.style.background = isActive ? accent : 'none';
+      tab.style.borderColor = isActive ? accent : 'var(--border)';
+      tab.style.color = isActive ? '#fff' : 'var(--muted)';
+    }
+    if (sec) sec.style.display = isActive ? 'block' : 'none';
+  });
+}
+
+window._adhocScanItems = [];
+
+async function addScannedItemToMeal(barcode) {
+  showToast('Looking up…');
+  try {
+    const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,brands,nutriments,serving_size`);
+    const data = await resp.json();
+    if (data.status !== 1 || !data.product) { showToast('Product not found — scan again or add manually'); return; }
+    const p = data.product;
+    const n = p.nutriments || {};
+    const hasServing = !!(n['energy-kcal_serving']);
+    const item = {
+      name: p.product_name || 'Unknown',
+      brand: p.brands ? p.brands.split(',')[0].trim() : '',
+      serving: p.serving_size || (hasServing ? '' : '100g'),
+      kcal:    Math.round(hasServing ? (n['energy-kcal_serving']||0)   : (n['energy-kcal_100g']||0)),
+      protein: Math.round(hasServing ? (n['proteins_serving']||0)      : (n['proteins_100g']||0)),
+      carbs:   Math.round(hasServing ? (n['carbohydrates_serving']||0) : (n['carbohydrates_100g']||0)),
+      fat:     Math.round(hasServing ? (n['fat_serving']||0)           : (n['fat_100g']||0)),
+      qty: 1,
+    };
+    window._adhocScanItems.push(item);
+    renderAdhocScanItems();
+    showToast('✅ ' + item.name + ' added');
+  } catch(e) {
+    showToast('Lookup failed — check connection');
   }
+}
+
+function renderAdhocScanItems() {
+  const el = document.getElementById('adhoc-scan-items');
+  const totalsEl = document.getElementById('adhoc-scan-totals');
+  const totalsText = document.getElementById('adhoc-scan-totals-text');
+  const items = window._adhocScanItems || [];
+  if (!el) return;
+  if (!items.length) { el.innerHTML = ''; if (totalsEl) totalsEl.style.display = 'none'; return; }
+
+  el.innerHTML = items.map((item, i) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1">
+          <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${item.name}${item.brand ? ' <span style="font-weight:400;color:var(--muted)">· '+item.brand+'</span>' : ''}</div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:2px">${item.kcal * item.qty} kcal · ${item.protein * item.qty}g P · ${item.serving}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:10px">
+          <button onclick="adjustScanItem(${i},-1)" style="width:26px;height:26px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
+          <span style="font-size:0.88rem;font-weight:700;min-width:18px;text-align:center">${item.qty}</span>
+          <button onclick="adjustScanItem(${i},1)" style="width:26px;height:26px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
+          <button onclick="removeScanItem(${i})" style="width:26px;height:26px;border-radius:6px;background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer">✕</button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const totKcal = items.reduce((s, r) => s + r.kcal * r.qty, 0);
+  const totProt = items.reduce((s, r) => s + r.protein * r.qty, 0);
+  const totCarb = items.reduce((s, r) => s + r.carbs * r.qty, 0);
+  const totFat  = items.reduce((s, r) => s + r.fat * r.qty, 0);
+  if (totalsEl) totalsEl.style.display = 'block';
+  if (totalsText) totalsText.textContent = totKcal + ' kcal · ' + totProt + 'g protein · ' + totCarb + 'g carbs · ' + totFat + 'g fat';
+}
+
+function adjustScanItem(i, delta) {
+  if (!window._adhocScanItems[i]) return;
+  window._adhocScanItems[i].qty = Math.max(1, (window._adhocScanItems[i].qty || 1) + delta);
+  renderAdhocScanItems();
+}
+
+function removeScanItem(i) {
+  window._adhocScanItems.splice(i, 1);
+  renderAdhocScanItems();
 }
 
 async function estimateAdhocWithAI() {
@@ -6738,14 +6888,28 @@ function quickAddProtein(name, cal, prot, carb, fat) {
 }
 
 function saveAdhocMeal() {
-  const name = document.getElementById('adhoc-name').value.trim();
-  const cal  = parseInt(document.getElementById('adhoc-cal').value)  || 0;
-  const prot = parseInt(document.getElementById('adhoc-prot').value) || 0;
-  const carb = parseInt(document.getElementById('adhoc-carb').value) || 0;
-  const fat  = parseInt(document.getElementById('adhoc-fat').value)  || 0;
-  if (!name) { showToast('⚠️ Give the meal a name'); return; }
-  if (!cal)  { showToast('⚠️ Enter calories'); return; }
+  // Scan mode — use scanned item totals
+  const scanSection = document.getElementById('adhoc-scan-section');
+  const isScanMode = scanSection && scanSection.style.display !== 'none';
+  let name, cal, prot, carb, fat;
 
+  if (isScanMode) {
+    const items = window._adhocScanItems || [];
+    if (!items.length) { showToast('⚠️ Scan at least one product'); return; }
+    name = (document.getElementById('adhoc-scan-name')?.value || '').trim() || items.map(r => r.name).join(' + ');
+    cal  = items.reduce((s, r) => s + r.kcal * r.qty, 0);
+    prot = items.reduce((s, r) => s + r.protein * r.qty, 0);
+    carb = items.reduce((s, r) => s + r.carbs * r.qty, 0);
+    fat  = items.reduce((s, r) => s + r.fat * r.qty, 0);
+  } else {
+    name = document.getElementById('adhoc-name').value.trim();
+    cal  = parseInt(document.getElementById('adhoc-cal').value)  || 0;
+    prot = parseInt(document.getElementById('adhoc-prot').value) || 0;
+    carb = parseInt(document.getElementById('adhoc-carb').value) || 0;
+    fat  = parseInt(document.getElementById('adhoc-fat').value)  || 0;
+    if (!name) { showToast('⚠️ Give the meal a name'); return; }
+    if (!cal)  { showToast('⚠️ Enter calories'); return; }
+  }
   const todayKey = currentProfile + '_' + currentDayIdx;
   const activePlan = userPrefs[currentProfile]?.activePlan;
   const plan = (confirmedWeekPlan && confirmedWeekPlan[currentDayIdx]) ||
@@ -14770,6 +14934,7 @@ function setPlannerWeek(offset) {
   state.weekStart = mon.toISOString().slice(0,10);
   state.generated = false;
   state.generatedPlan = null;
+  saveAll();
   renderWeekPlanner();
 }
 
@@ -14782,6 +14947,7 @@ function setPlannerStartDate(dateStr) {
   state.weekStart = monday.toISOString().slice(0, 10);
   state.generated = false;
   state.generatedPlan = null;
+  saveAll();
   renderWeekPlanner();
 }
 
@@ -14796,6 +14962,7 @@ function togglePlannerDay(dayIdx) {
   }
   state.generated = false;
   state.generatedPlan = null;
+  saveAll();
   renderWeekPlanner();
   renderWorkoutDayNav();
 }
@@ -15397,6 +15564,29 @@ function confirmPlannerPlan() {
   showToast('✅ Meal plan confirmed!');
 }
 
+function confirmEditPlan() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Edit confirmed plan?</div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-bottom:20px;line-height:1.6">
+        This will unlock your plan for editing and clear your shopping list. Your meal data will be kept so you can regenerate or adjust.
+      </div>
+      <button onclick="unconfirmPlannerPlan();this.closest('.modal-overlay').remove()"
+        style="width:100%;padding:13px;background:var(--max-light);color:#000;border:none;border-radius:10px;font-size:0.92rem;font-weight:700;cursor:pointer;font-family:var(--font-head);margin-bottom:8px">
+        Yes, edit plan
+      </button>
+      <button onclick="this.closest('.modal-overlay').remove()"
+        style="width:100%;padding:11px;border-radius:10px;background:none;border:1px solid var(--border);font-size:0.85rem;color:var(--muted);cursor:pointer">
+        Cancel
+      </button>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 function unconfirmPlannerPlan() {
   const state = getPlannerState(currentProfile);
   const weekKey = getWeekKey(new Date(state.weekStart));
@@ -15630,7 +15820,7 @@ function renderWeekPlanner() {
           <div style="font-size:0.82rem;font-weight:700;color:#00ff87">✅ Plan confirmed</div>
           <div style="font-size:0.7rem;color:var(--muted)">${formatDate(weekStart)} – ${formatDate(weekEnd)} · Confirmed at ${confirmedData?.time || '—'}${confirmedData?.estimatedCostGBP ? ' · ~£'+confirmedData.estimatedCostGBP : ''}</div>
         </div>
-        <button onclick="unconfirmPlannerPlan()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:0.72rem;color:var(--muted);cursor:pointer">Edit</button>
+        <button onclick="confirmEditPlan()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:0.72rem;color:var(--muted);cursor:pointer">Edit</button>
       </div>` : ''}
 
     <!-- Training day selector / confirmed day type editor -->
@@ -16477,7 +16667,7 @@ function saveAll() {
       shakenMeals, workoutSchedule, ormLogs, planWeightDefaults, exerciseState, adHocWorkouts,
       suppLogs, prepConfirmed, userPrefs, userMealLibrary,
       activePlanId, selectedProgressionModel, customPlans, trainingWeekCount,
-      nutrPlanConfirmed, weekMealPlan, freeGenCredits,
+      nutrPlanConfirmed, weekMealPlan, freeGenCredits, nutrPlannerState,
       hydrationLogs, sleepLogs, cycleLogs, planScheduleOverrides, sessionDaySwaps, profileCheckIns, conditioningLogs,
       profileSex: { max: PROFILES['max'].sex, kirsty: PROFILES['kirsty'].sex }
     }));
@@ -16499,7 +16689,7 @@ function load() {
       userPrefs = p.userPrefs||{};
       userMealLibrary = p.userMealLibrary||{};
       activePlanId = p.activePlanId||{}; selectedProgressionModel = p.selectedProgressionModel||{};
-      nutrPlanConfirmed = p.nutrPlanConfirmed||{}; weekMealPlan = p.weekMealPlan||{};
+      nutrPlanConfirmed = p.nutrPlanConfirmed||{}; weekMealPlan = p.weekMealPlan||{}; nutrPlannerState = p.nutrPlannerState||{};
       freeGenCredits = (p.freeGenCredits !== undefined) ? p.freeGenCredits : 15;
       customPlans = p.customPlans||{}; trainingWeekCount = p.trainingWeekCount||{};
       hydrationLogs = p.hydrationLogs||{}; sleepLogs = p.sleepLogs||{}; cycleLogs = p.cycleLogs||{};
@@ -16938,6 +17128,344 @@ function removeStapleMeal(idx) {
   prefs.stapleMeals.splice(idx, 1);
   saveAll(); renderStapleMeals();
   showToast('Removed');
+}
+
+// ── Barcode scanner via device camera ────────────────────────────────────
+async function scanBarcode(onResult) {
+  // Check support
+  if (!('BarcodeDetector' in window)) {
+    // Fallback: open a file picker for an image and try to decode from that
+    showToast('Barcode scanner not supported on this browser — try Chrome on Android or Safari on iOS 17+');
+    return;
+  }
+
+  // Build scanner overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'barcode-scan-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center';
+
+  overlay.innerHTML = `
+    <div style="position:relative;width:100%;max-width:420px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <video id="barcode-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0"></video>
+      <!-- Viewfinder overlay -->
+      <div style="position:relative;z-index:2;width:72%;aspect-ratio:3/2;border:3px solid rgba(0,255,135,0.9);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.55)"></div>
+      <div style="position:relative;z-index:2;margin-top:24px;font-size:0.88rem;color:#fff;font-weight:600;text-shadow:0 1px 4px #000">Point at a barcode</div>
+      <button onclick="closeBarcodeScanner()" style="position:relative;z-index:2;margin-top:20px;padding:12px 32px;border-radius:10px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+    const video = document.getElementById('barcode-video');
+    video.srcObject = stream;
+    await video.play();
+
+    const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] });
+
+    let scanning = true;
+    let lastBarcode = null;
+
+    const tick = async () => {
+      if (!scanning || !document.getElementById('barcode-scan-overlay')) return;
+      try {
+        const barcodes = await detector.detect(video);
+        if (barcodes.length && barcodes[0].rawValue !== lastBarcode) {
+          lastBarcode = barcodes[0].rawValue;
+          scanning = false;
+          closeBarcodeScanner(stream);
+          onResult(barcodes[0].rawValue);
+          return;
+        }
+      } catch(e) {}
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+
+    // Safety timeout — close after 60s
+    setTimeout(() => {
+      if (document.getElementById('barcode-scan-overlay')) {
+        scanning = false;
+        closeBarcodeScanner(stream);
+        showToast('Scanner timed out — try again');
+      }
+    }, 60000);
+
+  } catch(e) {
+    closeBarcodeScanner(stream);
+    showToast('Camera access denied — allow camera permission and try again');
+  }
+}
+
+function closeBarcodeScanner(stream) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const el = document.getElementById('barcode-scan-overlay');
+  if (el) el.remove();
+  // Also stop any lingering video tracks
+  const video = document.getElementById('barcode-video');
+  if (video && video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+}
+
+async function lookupBarcode(barcode, fillFn) {
+  showToast('Looking up barcode…');
+  try {
+    const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,brands,nutriments,serving_size,serving_quantity`);
+    const data = await resp.json();
+    if (data.status !== 1 || !data.product) { showToast('Product not found — try searching by name'); return; }
+    const p = data.product;
+    const n = p.nutriments || {};
+    const hasServing = !!(n['energy-kcal_serving']);
+    const result = {
+      name: p.product_name || 'Unknown product',
+      brand: p.brands ? p.brands.split(',')[0].trim() : '',
+      serving: p.serving_size || (hasServing ? '' : 'per 100g'),
+      kcal:    Math.round(hasServing ? (n['energy-kcal_serving']||0)   : (n['energy-kcal_100g']||0)),
+      protein: Math.round(hasServing ? (n['proteins_serving']||0)      : (n['proteins_100g']||0)),
+      carbs:   Math.round(hasServing ? (n['carbohydrates_serving']||0) : (n['carbohydrates_100g']||0)),
+      fat:     Math.round(hasServing ? (n['fat_serving']||0)           : (n['fat_100g']||0)),
+    };
+    fillFn(result);
+    showToast(`✅ Found: ${result.name}`);
+  } catch(e) {
+    showToast('Lookup failed — check connection');
+  }
+}
+
+function fillStapleFromProduct(r) {
+  const nameEl = document.getElementById('staple-name-input');
+  const foodEl = document.getElementById('staple-food-input');
+  const calEl  = document.getElementById('staple-cal');
+  const protEl = document.getElementById('staple-prot');
+  const carbEl = document.getElementById('staple-carb');
+  const fatEl  = document.getElementById('staple-fat');
+  const resEl  = document.getElementById('staple-search-results');
+  if (nameEl) nameEl.value = r.name + (r.brand ? ' ('+r.brand+')' : '');
+  if (foodEl) foodEl.value = r.name + (r.serving ? ' — '+r.serving : '');
+  if (calEl)  calEl.value  = r.kcal;
+  if (protEl) protEl.value = r.protein;
+  if (carbEl) carbEl.value = r.carbs;
+  if (fatEl)  fatEl.value  = r.fat;
+  if (resEl)  resEl.innerHTML = `<div style="font-size:0.75rem;color:var(--active);padding:4px 0">✅ ${r.kcal} kcal · ${r.protein}g P · ${r.carbs}g C · ${r.fat}g F</div>`;
+}
+
+function fillMealLibFromProduct(r) {
+  const nameEl = document.getElementById('mlib-name');
+  const calEl  = document.getElementById('mlib-cal');
+  const protEl = document.getElementById('mlib-pro');
+  const carbEl = document.getElementById('mlib-carb');
+  const fatEl  = document.getElementById('mlib-fat');
+  const ingrEl = document.getElementById('mlib-ingredients');
+  const resEl  = document.getElementById('mlib-search-results');
+  if (nameEl && !nameEl.value) nameEl.value = r.name + (r.brand ? ' ('+r.brand+')' : '');
+  if (calEl)  calEl.value  = r.kcal;
+  if (protEl) protEl.value = r.protein;
+  if (carbEl) carbEl.value = r.carbs;
+  if (fatEl)  fatEl.value  = r.fat;
+  if (ingrEl && !ingrEl.value) ingrEl.value = r.name + (r.serving ? ' ('+r.serving+')' : '');
+  if (resEl)  resEl.innerHTML = `<div style="font-size:0.75rem;color:var(--active);padding:4px 0">✅ ${r.kcal} kcal · ${r.protein}g P · ${r.carbs}g C · ${r.fat}g F</div>`;
+}
+
+// ── Open Food Facts product search ───────────────────────────────────────
+async function searchOpenFoodFacts(query) {
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments,serving_size,serving_quantity,product_quantity`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Search failed');
+  const data = await resp.json();
+  return (data.products || []).filter(p => {
+    const n = p.nutriments || {};
+    return p.product_name && (n['energy-kcal_serving'] || n['energy-kcal_100g']);
+  }).map(p => {
+    const n = p.nutriments || {};
+    // Prefer per-serving values, fall back to per-100g with a 100g serving
+    const hasServing = !!(n['energy-kcal_serving']);
+    const kcal    = Math.round(hasServing ? (n['energy-kcal_serving']||0)    : (n['energy-kcal_100g']||0));
+    const protein = Math.round(hasServing ? (n['proteins_serving']||0)       : (n['proteins_100g']||0));
+    const carbs   = Math.round(hasServing ? (n['carbohydrates_serving']||0)  : (n['carbohydrates_100g']||0));
+    const fat     = Math.round(hasServing ? (n['fat_serving']||0)            : (n['fat_100g']||0));
+    const serving = p.serving_size || (hasServing ? '' : 'per 100g');
+    const brand   = p.brands ? p.brands.split(',')[0].trim() : '';
+    return { name: p.product_name, brand, serving, kcal, protein, carbs, fat };
+  });
+}
+
+function renderFoodSearchResults(results, onSelect) {
+  if (!results.length) return '<div style="font-size:0.78rem;color:var(--muted);padding:8px 0">No products found — try a different search term or enter manually.</div>';
+  return results.map((r, i) =>
+    `<div onclick="(${onSelect.toString()})(${i})" style="padding:10px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);margin-bottom:6px;cursor:pointer">
+      <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${r.name}${r.brand ? ' <span style="font-weight:400;color:var(--muted)">· '+r.brand+'</span>' : ''}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:2px">${r.kcal} kcal · ${r.protein}g P · ${r.carbs}g C · ${r.fat}g F${r.serving ? ' · '+r.serving : ''}</div>
+    </div>`
+  ).join('');
+}
+
+let _offResults = []; // temp store for search results while user picks
+
+async function searchStapleProduct() {
+  const queryEl = document.getElementById('staple-search-input');
+  const resultEl = document.getElementById('staple-search-results');
+  const query = queryEl?.value?.trim();
+  if (!query) { showToast('Enter a product name to search'); return; }
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted);padding:8px 0">Searching…</div>';
+  try {
+    _offResults = await searchOpenFoodFacts(query);
+    if (resultEl) resultEl.innerHTML = renderFoodSearchResults(_offResults, function(i) {
+      fillStapleFromProduct(_offResults[i]);
+      showToast('✅ ' + _offResults[i].name + ' filled in');
+    });
+  } catch(e) {
+    if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted)">⚠️ Search failed — check connection or enter manually.</div>';
+  }
+}
+
+async function searchMealLibProduct() {
+  const queryEl = document.getElementById('mlib-search-input');
+  const resultEl = document.getElementById('mlib-search-results');
+  const query = queryEl?.value?.trim();
+  if (!query) { showToast('Enter a product name to search'); return; }
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted);padding:8px 0">Searching…</div>';
+  try {
+    _offResults = await searchOpenFoodFacts(query);
+    if (resultEl) resultEl.innerHTML = renderFoodSearchResults(_offResults, function(i) {
+      fillMealLibFromProduct(_offResults[i]);
+      showToast('✅ ' + _offResults[i].name + ' filled in');
+    });
+  } catch(e) {
+    if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted)">⚠️ Search failed — check connection or enter manually.</div>';
+  }
+}
+
+// ── Staple scan builder ───────────────────────────────────────────────────
+window._ssbItems = [];
+let _ssbSearchResults = [];
+
+function openStapleScanBuilder() {
+  window._ssbItems = [];
+  _ssbSearchResults = [];
+  const el = id => document.getElementById(id);
+  if (el('ssb-search-input')) el('ssb-search-input').value = '';
+  if (el('ssb-search-results')) el('ssb-search-results').innerHTML = '';
+  if (el('ssb-items')) el('ssb-items').innerHTML = '';
+  if (el('ssb-totals')) el('ssb-totals').style.display = 'none';
+  if (el('ssb-name')) el('ssb-name').value = '';
+  if (el('ssb-mealtype')) el('ssb-mealtype').value = '';
+  el('staple-scan-modal').style.display = 'flex';
+}
+
+function closeStapleScanBuilder() {
+  document.getElementById('staple-scan-modal').style.display = 'none';
+}
+
+async function ssbSearch() {
+  const queryEl = document.getElementById('ssb-search-input');
+  const resultEl = document.getElementById('ssb-search-results');
+  const query = queryEl?.value?.trim();
+  if (!query) return;
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted);padding:6px 0">Searching…</div>';
+  try {
+    _ssbSearchResults = await searchOpenFoodFacts(query);
+    if (resultEl) resultEl.innerHTML = renderFoodSearchResults(_ssbSearchResults, function(i) {
+      ssbAddItem(_ssbSearchResults[i]);
+      if (resultEl) resultEl.innerHTML = '';
+      if (queryEl) queryEl.value = '';
+    });
+  } catch(e) {
+    if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted)">⚠️ Search failed</div>';
+  }
+}
+
+async function ssbScanBarcode(barcode) {
+  showToast('Looking up…');
+  try {
+    const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,brands,nutriments,serving_size`);
+    const data = await resp.json();
+    if (data.status !== 1 || !data.product) { showToast('Product not found'); return; }
+    const p = data.product;
+    const n = p.nutriments || {};
+    const hasServing = !!(n['energy-kcal_serving']);
+    ssbAddItem({
+      name: p.product_name || 'Unknown',
+      brand: p.brands ? p.brands.split(',')[0].trim() : '',
+      serving: p.serving_size || (hasServing ? '' : '100g'),
+      kcal:    Math.round(hasServing ? (n['energy-kcal_serving']||0)   : (n['energy-kcal_100g']||0)),
+      protein: Math.round(hasServing ? (n['proteins_serving']||0)      : (n['proteins_100g']||0)),
+      carbs:   Math.round(hasServing ? (n['carbohydrates_serving']||0) : (n['carbohydrates_100g']||0)),
+      fat:     Math.round(hasServing ? (n['fat_serving']||0)           : (n['fat_100g']||0)),
+    });
+    showToast('✅ ' + (p.product_name || 'Product') + ' added');
+  } catch(e) {
+    showToast('Lookup failed — check connection');
+  }
+}
+
+function ssbAddItem(product) {
+  window._ssbItems.push({...product, qty: 1});
+  renderSsbItems();
+}
+
+function renderSsbItems() {
+  const el = document.getElementById('ssb-items');
+  const totalsEl = document.getElementById('ssb-totals');
+  const totalsText = document.getElementById('ssb-totals-text');
+  const items = window._ssbItems;
+  if (!el) return;
+  if (!items.length) { el.innerHTML = ''; if (totalsEl) totalsEl.style.display = 'none'; return; }
+
+  el.innerHTML = items.map((item, i) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}${item.brand ? ' <span style="font-weight:400;color:var(--muted)">· '+item.brand+'</span>' : ''}</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${item.kcal * item.qty} kcal · ${item.protein * item.qty}g P · ${item.serving || ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:10px;flex-shrink:0">
+          <button onclick="ssbAdjust(${i},-1)" style="width:26px;height:26px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:1rem;cursor:pointer">−</button>
+          <span style="font-size:0.88rem;font-weight:700;min-width:16px;text-align:center">${item.qty}</span>
+          <button onclick="ssbAdjust(${i},1)" style="width:26px;height:26px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:1rem;cursor:pointer">+</button>
+          <button onclick="ssbRemove(${i})" style="width:26px;height:26px;border-radius:6px;background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer">✕</button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const totKcal = items.reduce((s, r) => s + r.kcal * r.qty, 0);
+  const totProt = items.reduce((s, r) => s + r.protein * r.qty, 0);
+  const totCarb = items.reduce((s, r) => s + r.carbs * r.qty, 0);
+  const totFat  = items.reduce((s, r) => s + r.fat * r.qty, 0);
+  if (totalsEl) totalsEl.style.display = 'block';
+  if (totalsText) totalsText.textContent = `${totKcal} kcal · ${totProt}g protein · ${totCarb}g carbs · ${totFat}g fat`;
+}
+
+function ssbAdjust(i, delta) {
+  if (!window._ssbItems[i]) return;
+  window._ssbItems[i].qty = Math.max(1, (window._ssbItems[i].qty || 1) + delta);
+  renderSsbItems();
+}
+
+function ssbRemove(i) {
+  window._ssbItems.splice(i, 1);
+  renderSsbItems();
+}
+
+function saveStapleScanBuilder() {
+  const items = window._ssbItems;
+  if (!items.length) { showToast('⚠️ Add at least one ingredient'); return; }
+  const name = (document.getElementById('ssb-name')?.value || '').trim();
+  if (!name) { showToast('⚠️ Give the staple a name'); return; }
+  const mealType = document.getElementById('ssb-mealtype')?.value || '';
+
+  const cal  = items.reduce((s, r) => s + r.kcal * r.qty, 0);
+  const prot = items.reduce((s, r) => s + r.protein * r.qty, 0);
+  const carb = items.reduce((s, r) => s + r.carbs * r.qty, 0);
+  const fat  = items.reduce((s, r) => s + r.fat * r.qty, 0);
+  const food = items.map(r => (r.qty > 1 ? r.qty + '× ' : '') + r.name).join(' + ');
+
+  const prefs = getPrefs(currentProfile);
+  if (!prefs.stapleMeals) prefs.stapleMeals = [];
+  prefs.stapleMeals.push({ name, food, mealType, calories: cal, protein: prot, carbs: carb, fat });
+  saveAll();
+  renderStapleMeals();
+  closeStapleScanBuilder();
+  showToast('✅ ' + name + ' saved as staple — ' + cal + ' kcal · ' + prot + 'g protein');
 }
 
 async function lookupStapleAI() {
@@ -17750,7 +18278,7 @@ async function generateAIPlan(context) {
 
   const mealSelectionRule = isFreeGen
     ? `6. MEAL CREATION — The user has asked for new/custom meals. CREATE entirely new meals that aren't in the library. They must still match the user's macros, dietary flags and budget. Give each a clear descriptive name and realistic UK ingredient portions.`
-    : `6. MEAL SELECTION — USE THE MEAL LIBRARY ABOVE. Pick meals by name exactly as listed. Prioritise ⭐ FAVOURITE and [YOUR MEAL] entries — use these whenever a suitable slot exists. Use the library "food" description as the food field. Only invent a new meal if the library genuinely has no suitable option for a specific slot.`;
+    : `6. MEAL SELECTION — USE THE MEAL LIBRARY ABOVE. Pick meals by name exactly as listed. Prioritise ⭐ FAVOURITE and [YOUR MEAL] entries — use these whenever a suitable slot exists. Use the library "food" description as the food field. Use the EXACT calorie and macro values shown in the library — do NOT alter them. Only invent a new meal if the library has NO entries at all for a specific slot type, and if you do, state exact ingredients and portions so macros are verifiable.`;
 
   // Detect calorie reserve request — e.g. 'leave me 200 calories for a treat'
   const reserveMatch = extraInstructions && (
@@ -17766,10 +18294,29 @@ async function generateAIPlan(context) {
     : '';
 
   const stapleMealsForPrompt = prefs.stapleMeals || [];
+
+  // Net down macro targets by staple contributions so the AI generates the REMAINING meals only
+  const stapleCalForPrompt  = stapleMealsForPrompt.reduce((s, m) => s + (m.calories||0), 0);
+  const stapleProtForPrompt = stapleMealsForPrompt.reduce((s, m) => s + (m.protein||0),  0);
+  const stapleCarbForPrompt = stapleMealsForPrompt.reduce((s, m) => s + (m.carbs||0),    0);
+  const stapleFatForPrompt  = stapleMealsForPrompt.reduce((s, m) => s + (m.fat||0),      0);
+  const netAdjCalMin  = Math.max(100, adjCalMin  - stapleCalForPrompt);
+  const netAdjCalMax  = Math.max(100, adjCalMax  - stapleCalForPrompt);
+  const netProtMin    = Math.max(10,  macros.protein.min - stapleProtForPrompt);
+  const netProtMax    = Math.max(10,  macros.protein.max - stapleProtForPrompt);
+  const netCarbMin    = Math.max(0,   macros.carbs.min   - stapleCarbForPrompt);
+  const netCarbMax    = Math.max(0,   macros.carbs.max   - stapleCarbForPrompt);
+  const netFatMin     = Math.max(0,   macros.fat.min     - stapleFatForPrompt);
+  const netFatMax     = Math.max(0,   macros.fat.max     - stapleFatForPrompt);
+
+  // Number of meals the AI needs to generate = total slots minus staple-covered slots
+  const stapleSlotsCovered = stapleMealsForPrompt.length;
+  const mealsToGenerate = Math.max(1, (prefs.mealCount||5) - stapleSlotsCovered);
+
   const staplePromptStr = stapleMealsForPrompt.length
-    ? `STAPLE MEALS (FIXED — include these EVERY day, exactly as listed, do NOT replace or omit them):\n${stapleMealsForPrompt.map(s =>
-        `  - Slot: ${s.mealType || 'Any'} | Name: ${s.name} | ${s.calories||0} kcal, ${s.protein||0}g protein, ${s.carbs||0}g carbs, ${s.fat||0}g fat\n    → Include this meal verbatim in every day. Do NOT generate a different meal for this slot.`
-      ).join('\n')}\nThe macro targets below have already had these staple meals subtracted. Only generate the REMAINING meals.`
+    ? `STAPLE MEALS (LOCKED — include these EVERY day with EXACT macro values as listed. Do NOT change the calories, protein, carbs or fat values. Do NOT replace or omit them):\n${stapleMealsForPrompt.map(s =>
+        `  - Slot: ${s.mealType || 'Any'} | Name: ${s.name} | LOCKED: ${s.calories||0} kcal, ${s.protein||0}g protein, ${s.carbs||0}g carbs, ${s.fat||0}g fat`
+      ).join('\n')}\nSTAPLE TOTALS per day: EXACTLY ${stapleCalForPrompt} kcal, ${stapleProtForPrompt}g protein. These values are fixed — do not alter them.\nGenerate only the remaining ${mealsToGenerate} meal slot(s) to hit the NET targets below.`
     : '';
 
   // Build dynamic day-type and training-focus lines from the user's actual plan
@@ -17846,11 +18393,16 @@ async function generateAIPlan(context) {
 
 USER PROFILE:
 - Name: ${p.name}
-- Daily calorie target from meals: ${adjCalMin}\u2013${adjCalMax} kcal${calorieReserve ? ` (${calorieReserve} kcal reserved for a treat — full TDEE is ${macros.calories.min}\u2013${macros.calories.max} kcal)` : ' (MUST HIT THIS EVERY DAY)'}
-- Daily protein target: ${macros.protein.min}\u2013${macros.protein.max}g (NON-NEGOTIABLE \u2014 hit this every day)
-- Carbs target: ${macros.carbs.min}\u2013${macros.carbs.max}g per day
-- Fat target: ${macros.fat.min}\u2013${macros.fat.max}g per day
-- Meals per day: ${prefs.mealCount}
+- TOTAL daily calorie target: ${adjCalMin}–${adjCalMax} kcal (MUST HIT THIS EVERY DAY including staples)
+- TOTAL daily protein target: ${macros.protein.min}–${macros.protein.max}g (NON-NEGOTIABLE — hit this every day including staples)
+- Carbs target: ${macros.carbs.min}–${macros.carbs.max}g per day total
+- Fat target: ${macros.fat.min}–${macros.fat.max}g per day total
+- Total meals per day: ${prefs.mealCount}
+- Meals YOU must generate (excluding fixed staples): ${mealsToGenerate}
+- NET calorie target for generated meals only: ${netAdjCalMin}–${netAdjCalMax} kcal
+- NET protein target for generated meals only: ${netProtMin}–${netProtMax}g
+- NET carbs target for generated meals only: ${netCarbMin}–${netCarbMax}g
+- NET fat target for generated meals only: ${netFatMin}–${netFatMax}g
 - Dietary requirements: ${dietStr}
 - Foods NEVER to include (strict exclusions): ${avoidStr}
 ${reserveNote ? reserveNote + '\n' : ''}${personalityCtxMeal}
@@ -17873,7 +18425,7 @@ ${staplePromptStr ? staplePromptStr + '\n\n' : ''}PLAN REQUIREMENTS:
 5. Hit calorie AND protein targets every single day — check your numbers before responding
 6. ${mealSelectionRule}
 7. BUDGET ENFORCEMENT — Every meal has a cost_p (pence). Sum of all cost_p values across the week MUST stay within weekly budget. If no budget is set, prefer lower-cost options where macros allow.
-8. STAPLE MEALS — if staple meals are listed above, include them verbatim in every single day. Never replace, swap or omit a staple meal. Generate other meals only for the remaining slots.
+8. STAPLE MEALS — include every staple listed above in every single day with the EXACT calorie and macro values shown. These are locked — do not alter the numbers, do not replace or omit any staple. Generate meals only for the remaining ${mealsToGenerate} non-staple slot(s).
 9. Vary non-staple meals across the week — never use the same generated meal for the same slot on consecutive days
 10. Include a higher-carb meal pre-workout on training days
 11. NEVER include any avoided foods
@@ -19010,6 +19562,79 @@ function setMealLibTab(tab, el) {
   document.querySelectorAll('.meal-lib-tab').forEach(function(b){ b.classList.remove('active'); });
   if (el) el.classList.add('active');
   renderMealLibrary();
+}
+
+async function verifyMealLibraryMacros() {
+  const resultEl = document.getElementById('verify-macros-results');
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted);padding:6px 0">Checking your meals against Open Food Facts…</div>';
+
+  const lib = getMealLibrary(currentProfile);
+  const allMeals = [];
+  Object.entries(lib).forEach(([type, meals]) => {
+    (meals || []).forEach((m, idx) => allMeals.push({...m, _type: type, _idx: idx}));
+  });
+
+  if (!allMeals.length) {
+    if (resultEl) resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--muted)">No meals in your library yet.</div>';
+    return;
+  }
+
+  const issues = [];
+  for (const meal of allMeals) {
+    try {
+      const results = await searchOpenFoodFacts(meal.name);
+      if (!results.length) continue;
+      const best = results[0];
+      const calDiff = Math.abs((meal.calories || 0) - best.kcal);
+      const protDiff = Math.abs((meal.protein || 0) - best.protein);
+      // Flag if calories are off by more than 15% or protein by more than 10g
+      if (calDiff > (best.kcal * 0.15) || protDiff > 10) {
+        issues.push({
+          name: meal.name,
+          stored: { cal: meal.calories || 0, prot: meal.protein || 0 },
+          found:  { cal: best.kcal, prot: best.protein, brand: best.brand },
+          type: meal._type, idx: meal._idx
+        });
+      }
+      // Small delay to be kind to the API
+      await new Promise(r => setTimeout(r, 200));
+    } catch(e) { /* skip failed lookups */ }
+  }
+
+  if (!resultEl) return;
+  if (!issues.length) {
+    resultEl.innerHTML = '<div style="font-size:0.78rem;color:var(--active);padding:6px 0">✅ All meals checked — macros look consistent with Open Food Facts.</div>';
+    return;
+  }
+
+  resultEl.innerHTML = `
+    <div style="background:rgba(244,200,95,0.08);border:1px solid rgba(244,200,95,0.25);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--gold);margin-bottom:8px">⚠️ ${issues.length} meal${issues.length > 1 ? 's' : ''} may have inaccurate macros</div>
+      ${issues.map((issue, i) => `
+        <div style="padding:8px 0;border-top:1px solid var(--border)">
+          <div style="font-size:0.78rem;font-weight:700;color:var(--text)">${issue.name}</div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:2px">
+            Stored: ${issue.stored.cal} kcal · ${issue.stored.prot}g protein<br>
+            Found${issue.found.brand ? ' (' + issue.found.brand + ')' : ''}: ${issue.found.cal} kcal · ${issue.found.prot}g protein
+          </div>
+          <button onclick="updateMealLibraryMacros('${issue.type}',${issue.idx},${issue.found.cal},${issue.found.prot})"
+            style="margin-top:6px;padding:5px 10px;border-radius:6px;background:var(--max-light);color:#000;border:none;font-size:0.72rem;font-weight:700;cursor:pointer">
+            Update to ${issue.found.cal} kcal / ${issue.found.prot}g
+          </button>
+        </div>`).join('')}
+    </div>`;
+}
+
+function updateMealLibraryMacros(type, idx, kcal, protein) {
+  const lib = getMealLibrary(currentProfile);
+  if (lib[type] && lib[type][idx]) {
+    lib[type][idx].calories = kcal;
+    lib[type][idx].protein  = protein;
+    saveAll();
+    renderMealLibrary();
+    verifyMealLibraryMacros();
+    showToast('✅ Macros updated');
+  }
 }
 
 function renderMealLibrary() {
@@ -22438,6 +23063,17 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
       <div class="modal-title" style="margin-bottom:0" id="meal-lib-modal-title">New Meal</div>
       <button class="modal-close" onclick="closeMealLibraryModal()">✕</button>
+    </div>
+
+    <!-- Product search -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:0.75rem;font-weight:700;margin-bottom:6px;color:var(--text)">🔍 Search product (Open Food Facts)</div>
+      <div style="display:flex;gap:8px">
+        <input id="mlib-search-input" placeholder="e.g. Quaker Oats, chicken breast..." style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:0.82rem;color:var(--text);font-family:var(--font-body)" onkeydown="if(event.key==='Enter')searchMealLibProduct()">
+        <button onclick="searchMealLibProduct()" style="padding:9px 14px;border-radius:8px;background:var(--max-light);color:#000;border:none;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Search</button>
+        <button onclick="scanBarcode(b=>lookupBarcode(b,fillMealLibFromProduct))" title="Scan barcode" style="padding:9px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:1rem;cursor:pointer">📷</button>
+      </div>
+      <div id="mlib-search-results" style="margin-top:8px"></div>
     </div>
 
     <!-- AI fill button (paid) -->
