@@ -5211,6 +5211,7 @@ const MEAL_SWAPS = {
 // ============ STATE ============
 let currentProfile = null;
 let currentDayIdx = 0;
+let currentWorkoutDate = new Date(); // the date currently shown in the workout tab
 let loggedMeals = {};
 let shopChecked = {};
 let weightLogs = {};
@@ -6205,6 +6206,7 @@ function selectProfile(profile) {
   initPlanState();
   const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
   currentDayIdx = todayIdx;
+  currentWorkoutDate = new Date(); currentWorkoutDate.setHours(0,0,0,0);
   const _safeRender = (fn, name) => { try { fn(); } catch(e) { console.warn('render error in ' + name + ':', e.message); } };
   _safeRender(() => renderDayNav(), 'renderDayNav');
   _safeRender(() => renderDay(currentDayIdx), 'renderDay');
@@ -6252,6 +6254,9 @@ function showPage(page, el) {
     }
   }
   if (page === 'workout') {
+    // Snap back to today when switching to the workout tab
+    currentWorkoutDate = new Date(); currentWorkoutDate.setHours(0,0,0,0);
+    currentDayIdx = (currentWorkoutDate.getDay() + 6) % 7;
     // Reset all expanded cards so exercises start collapsed on tab open
     const wKey = currentProfile + '_' + currentDayIdx;
     Object.keys(expandedExerciseCards).forEach(k => { if (k.startsWith(wKey + '_ex_')) delete expandedExerciseCards[k]; });
@@ -6893,7 +6898,7 @@ function openMoveSessionModal(fromDayIdx) {
   if (!plan) return;
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const fullDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-  const weekKey = getWeekKey();
+  const weekKey = getWeekKey(currentWorkoutDate);
   const fromSwapKey = profile + '_' + weekKey + '_' + fromDayIdx;
   const fromEffIdx = (sessionDaySwaps[fromSwapKey] !== undefined && sessionDaySwaps[fromSwapKey] !== -1) ? sessionDaySwaps[fromSwapKey] : fromDayIdx;
   const fromDayPlan = plan.schedule.find(d => d.day === days[fromEffIdx]) || {};
@@ -6939,7 +6944,7 @@ function openMoveSessionModal(fromDayIdx) {
 
 function applySessionMove(fromDayIdx, toDayIdx) {
   const profile = currentProfile;
-  const weekKey = getWeekKey();
+  const weekKey = getWeekKey(currentWorkoutDate);
   const keyFrom = profile + '_' + weekKey + '_' + fromDayIdx;
   const keyTo   = profile + '_' + weekKey + '_' + toDayIdx;
   const srcFrom = (sessionDaySwaps[keyFrom] !== undefined && sessionDaySwaps[keyFrom] !== -1) ? sessionDaySwaps[keyFrom] : fromDayIdx;
@@ -6954,7 +6959,7 @@ function applySessionMove(fromDayIdx, toDayIdx) {
 
 function clearSessionDaySwap(dayIdx) {
   const profile = currentProfile;
-  const weekKey = getWeekKey();
+  const weekKey = getWeekKey(currentWorkoutDate);
   const prefix = profile + '_' + weekKey + '_';
   Object.keys(sessionDaySwaps).forEach(function(k) { if (k.startsWith(prefix)) delete sessionDaySwaps[k]; });
   saveAll();
@@ -7552,7 +7557,7 @@ function renderWorkout(idx) {
 
   // Fallback to legacy WORKOUTS data
   const workout = getWorkoutForDay(currentProfile, idx);
-  const wKey = currentProfile + '_' + idx;
+  const wKey = getWorkoutWeekKey(currentProfile, idx);
   const content = document.getElementById('workout-content');
   const subtitle = document.getElementById('workout-subtitle');
   const plan = (MEAL_PLANS[currentProfile]||MEAL_PLANS['max']||[])[idx];
@@ -8028,47 +8033,78 @@ function renderWorkoutDayNav() {
   const el = document.getElementById('workout-day-nav');
   if (!el) return;
   const plan = getActivePlan(currentProfile);
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const fullDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-  const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0
+  const dayNames3 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const base = new Date(currentWorkoutDate); base.setHours(0,0,0,0);
+  const pills = [];
+  for (let offset = -3; offset <= 3; offset++) {
+    const d = new Date(base); d.setDate(d.getDate() + offset);
+    const dayIdx = (d.getDay() + 6) % 7;
+    const dayName = dayNames3[dayIdx];
+    const isActive = offset === 0;
+    const isToday = d.getTime() === today.getTime();
+    const isoDate = d.toISOString().slice(0,10);
+    const dateNum = d.getDate();
+    let meta = '';
+    if (plan) {
+      // Check if this day's week has a confirmed nutrition plan with explicit training days
+      const pillWeekKey = getWeekKey(d);
+      const confirmedWeek = (nutrPlanConfirmed[currentProfile] || {})[pillWeekKey];
+      const confirmedTrainingDays = confirmedWeek?.trainingDays;
 
-  el.innerHTML =
-    '<button class="workout-day-prev" onclick="shiftWorkoutDay(-1)">‹</button>' +
-    '<div class="workout-day-scroll" id="workout-day-scroll">' +
-    days.map((d, i) => {
-      let label = d;
-      let meta = '';
-      if (plan) {
+      // Determine effective training days for this pill's week:
+      // 1. Confirmed plan training days (highest priority)
+      // 2. In-progress planner state if the planner is set to this week but not yet confirmed
+      // 3. Static workout plan schedule (fallback)
+      const plannerState = nutrPlannerState[currentProfile];
+      const plannerWeekKey = plannerState?.weekStart ? getWeekKey(new Date(plannerState.weekStart)) : null;
+      const inProgressTrainingDays = (!confirmedWeek?.confirmed && plannerWeekKey === pillWeekKey && plannerState?.trainingDays)
+        ? plannerState.trainingDays : null;
+      // Use confirmed plan's training days if the plan is confirmed (even if empty = all rest)
+      // Fall back to in-progress planner state, then static schedule
+      const hasConfirmedPlan = !!confirmedWeek?.confirmed;
+      const effectiveTrainingDays = hasConfirmedPlan ? (confirmedWeek.trainingDays || [])
+        : inProgressTrainingDays !== null ? inProgressTrainingDays : null;
+
+      if (effectiveTrainingDays !== null) {
+        if (effectiveTrainingDays.includes(dayIdx)) {
+          // Positional mapping: Nth training day → Nth training session from plan
+          const sortedEffective = [...effectiveTrainingDays].sort((a, b) => a - b);
+          const positionInWeek = sortedEffective.indexOf(dayIdx);
+          const planTrainingSessions = plan.schedule.filter(s => s.type === 'training');
+          const session = planTrainingSessions[positionInWeek % planTrainingSessions.length];
+          meta = session?.name || 'Training';
+        } else {
+          const planDay = plan.schedule.find(s => s.day === dayName);
+          if (planDay?.type === 'cardio') meta = 'Cardio';
+          else meta = 'Rest';
+        }
+      } else {
+        // No nutrition plan data for this week — fall back to static plan schedule
         const sched = getScheduleForProfile(currentProfile);
-        const dayEntry = sched ? sched[i] : plan.schedule[i];
-        const planDay = plan.schedule.find(s => s.day === d);
-        const type = dayEntry?.type || planDay?.type || 'rest';
-        if (type === 'training') meta = dayEntry?.name || planDay?.name || 'Training';
+        const planDay = plan.schedule.find(s => s.day === dayName);
+        const type = (sched && sched[dayIdx])?.type || planDay?.type || 'rest';
+        if (type === 'training') meta = (sched && sched[dayIdx])?.name || planDay?.name || 'Training';
         else if (type === 'cardio') meta = 'Cardio';
         else meta = 'Rest';
       }
-      const isToday = i === todayIdx;
-      const isActive = i === currentDayIdx;
-      return '<button class="workout-day-pill' +
-        (isActive ? ' active' : '') +
-        (isToday && !isActive ? ' today-pill' : '') +
-        '" onclick="setWorkoutDay(' + i + ')" id="wday-pill-' + i + '">' +
-        d + (isToday ? ' ·' : '') +
-        (meta ? '<br><span style="font-size:0.6rem;opacity:0.7">' + meta + '</span>' : '') +
-        '</button>';
-    }).join('') +
-    '</div>' +
-    '<button class="workout-day-next" onclick="shiftWorkoutDay(1)">›</button>';
+    }
+    pills.push('<button class="workout-day-pill' + (isActive ? ' active' : '') + (isToday && !isActive ? ' today-pill' : '') + '" onclick="navigateWorkoutToDate(\'' + isoDate + '\')" id="wday-pill-' + (offset+3) + '"><span style="font-size:0.65rem;display:block;opacity:' + (isActive?'1':'0.6') + '">' + dayName + '</span><span style="font-size:0.85rem;font-weight:' + (isActive?'800':'500') + '">' + dateNum + (isToday ? '·' : '') + '</span>' + (meta ? '<br><span style="font-size:0.6rem;opacity:0.7">' + meta + '</span>' : '') + '</button>');
+  }
+  el.innerHTML = '<button class="workout-day-prev" onclick="shiftWorkoutDay(-1)">‹</button><div class="workout-day-scroll" id="workout-day-scroll">' + pills.join('') + '</div><button class="workout-day-next" onclick="shiftWorkoutDay(1)">›</button>';
+  setTimeout(() => { const a = document.getElementById('wday-pill-3'); if (a) a.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}); }, 50);
+}
 
-  // Scroll active pill into view
-  setTimeout(() => {
-    const active = document.getElementById('wday-pill-' + currentDayIdx);
-    if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  }, 50);
+function navigateWorkoutToDate(isoDate) {
+  currentWorkoutDate = new Date(isoDate + 'T00:00:00');
+  currentDayIdx = (currentWorkoutDate.getDay() + 6) % 7;
+  const wKey = currentProfile + '_' + currentDayIdx;
+  Object.keys(expandedExerciseCards).forEach(k => { if (k.startsWith(wKey + '_ex_')) delete expandedExerciseCards[k]; });
+  renderWorkoutDayNav();
+  renderWorkout(currentDayIdx);
 }
 
 function getScheduleForProfile(profile) {
-  // Returns the effective per-day schedule array, honouring overrides
   const plan = getActivePlan(profile);
   if (!plan) return null;
   const overrides = planScheduleOverrides[profile] || [];
@@ -8082,7 +8118,9 @@ function getScheduleForProfile(profile) {
 
 function setWorkoutDay(idx) {
   currentDayIdx = idx;
-  // Reset expand state so all cards start collapsed on the new day
+  const mon = getWeekMonday(currentWorkoutDate);
+  mon.setDate(mon.getDate() + idx);
+  currentWorkoutDate = mon;
   const wKey = currentProfile + '_' + idx;
   Object.keys(expandedExerciseCards).forEach(k => { if (k.startsWith(wKey + '_ex_')) delete expandedExerciseCards[k]; });
   renderWorkoutDayNav();
@@ -8090,7 +8128,9 @@ function setWorkoutDay(idx) {
 }
 
 function shiftWorkoutDay(dir) {
-  currentDayIdx = (currentDayIdx + dir + 7) % 7;
+  currentWorkoutDate = new Date(currentWorkoutDate);
+  currentWorkoutDate.setDate(currentWorkoutDate.getDate() + dir);
+  currentDayIdx = (currentWorkoutDate.getDay() + 6) % 7;
   const wKey = currentProfile + '_' + currentDayIdx;
   Object.keys(expandedExerciseCards).forEach(k => { if (k.startsWith(wKey + '_ex_')) delete expandedExerciseCards[k]; });
   renderWorkoutDayNav();
@@ -11423,7 +11463,7 @@ function pickCoachIcon(icon) {
 // Used to gate AI features with helpful context rather than silent failure or wasted credits
 
 function checkExerciseCoachReady() {
-  const wKey = currentProfile + '_' + currentDayIdx;
+  const wKey = getWorkoutWeekKey(currentProfile, currentDayIdx);
   const logs = workoutLogs[wKey] || {};
   // Check if any set has been marked done today
   const hasLoggedSets = Object.values(logs).some(exLog =>
@@ -12619,7 +12659,7 @@ async function sendCoachMessage() {
 
   // ── LIVE SESSION: read current workout sets directly from workoutLogs ──
   const ormVal   = getLatest1RM(profile, coachState.exercise);
-  const wKeyLive = profile + '_' + currentDayIdx;
+  const wKeyLive = getWorkoutWeekKey(profile, currentDayIdx);
   const curWorkout = getWorkoutForDayFromPlan(profile, currentDayIdx) || getWorkoutForDay(profile, currentDayIdx);
   const liveSessionLines = [];
   if (curWorkout && curWorkout !== 'cardio' && curWorkout.exercises) {
@@ -12801,9 +12841,9 @@ function isTrainingWeekComplete(profile) {
     .filter(d => d.type === 'training');
   if (trainingDays.length === 0) return false;
   // Check if all training days have at least one logged set this week
-  // We use workoutLogs keys: profile_dayIdx
+  // We use workoutLogs keys: profile_WEEKMONDAY_wk_dayIdx
   const allLogged = trainingDays.every(td => {
-    const wKey = profile + '_' + td.idx;
+    const wKey = getWorkoutWeekKey(profile, td.idx);
     const log = workoutLogs[wKey];
     if (!log) return false;
     // Check any set has a weight or done flag
@@ -14396,6 +14436,26 @@ function getWeekKey(date) {
   return mon.toISOString().slice(0,10);
 }
 
+// Returns a week-scoped workout log key: profile_WEEKMONDAY_dayIdx
+// Prevents set logs carrying over week-to-week
+// Pass a date to derive the week from that date (for browsing past/future weeks)
+function getWorkoutWeekKey(profile, dayIdx, date) {
+  const weekMon = getWeekMonday(date || currentWorkoutDate);
+  return profile + '_' + weekMon.toISOString().slice(0,10) + '_wk_' + dayIdx;
+}
+
+// Prune workout log keys older than 8 weeks to prevent localStorage bloat
+function pruneOldWorkoutLogs() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 56); // 8 weeks
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  Object.keys(workoutLogs).forEach(k => {
+    // New format: profile_YYYY-MM-DD_wk_N
+    const m = k.match(/_(\d{4}-\d{2}-\d{2})_wk_/);
+    if (m && m[1] < cutoffStr) delete workoutLogs[k];
+  });
+}
+
 function isNutrPlanConfirmed(profile, weekKey) {
   const key = weekKey || getWeekKey();
   return !!(nutrPlanConfirmed[profile] && nutrPlanConfirmed[profile][key]?.confirmed);
@@ -14728,27 +14788,19 @@ function setPlannerStartDate(dateStr) {
 function togglePlannerDay(dayIdx) {
   const state = getPlannerState(currentProfile);
   const idx = state.trainingDays.indexOf(dayIdx);
-  const activeKey = activePlanId[currentProfile];
-  const activePlan = activeKey ? (PLAN_LIBRARY.find(p=>p.id===activeKey)||(customPlans[currentProfile]||[]).find(p=>p.id===activeKey)) : null;
-  const scheduleCount = activePlan?.schedule ? activePlan.schedule.filter(d => d.type==='training').length : 0;
-  const maxDays = scheduleCount || activePlan?.days || 7;
   if (idx >= 0) {
     state.trainingDays.splice(idx, 1);
   } else {
-    if (state.trainingDays.length >= maxDays) {
-      showToast('Max ' + maxDays + ' training days for this plan');
-      return;
-    }
     state.trainingDays.push(dayIdx);
     state.trainingDays.sort();
   }
   state.generated = false;
   state.generatedPlan = null;
   renderWeekPlanner();
+  renderWorkoutDayNav();
 }
 
 function cyclePlanDayType(dayIdx) {
-  // Cycles the day type in the confirmed plan without wiping meals
   const profile = currentProfile;
   const state = getPlannerState(profile);
   const weekKey = getWeekKey(new Date(state.weekStart));
@@ -15341,6 +15393,7 @@ function confirmPlannerPlan() {
   confirmNutritionPlan(currentProfile, weekKey, state.generatedPlan);
   renderWeekPlanner();
   renderNutrientGoals();
+  renderWorkoutDayNav();
   showToast('✅ Meal plan confirmed!');
 }
 
@@ -15351,6 +15404,7 @@ function unconfirmPlannerPlan() {
   state.generated = false;
   state.generatedPlan = null;
   renderWeekPlanner();
+  renderWorkoutDayNav();
   showToast('↩ Plan unconfirmed');
 }
 
@@ -15530,16 +15584,7 @@ function renderWeekPlanner() {
 
   const activePlan = getActivePlan(profile);
   const planName = activePlan?.name || 'No workout plan set';
-  // Use the plan's schedule to count training days — this is the authoritative source
-  const scheduleTrainingDays = activePlan?.schedule
-    ? activePlan.schedule.filter(d => d.type === 'training').length
-    : 0;
-  const maxDays = scheduleTrainingDays || activePlan?.days || 7;
-  // Cap existing trainingDays to plan's max (in case plan was changed to one with fewer days)
-  if (state.trainingDays.length > maxDays) {
-    state.trainingDays = getDefaultTrainingDays(profile);
-    state.generated = false; state.generatedPlan = null;
-  }
+  const maxDays = 7; // no cap — rolling cycles can have any number of sessions per week
 
   // If confirmed and no generated plan in state, load from stored
   const displayPlan = state.generatedPlan || (confirmed ? getNutrWeekMealPlan(profile, weekKey) : null);
@@ -15593,7 +15638,7 @@ function renderWeekPlanner() {
       <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px">
         ${confirmed
           ? 'Day types <span style="font-weight:400;text-transform:none;letter-spacing:0"> — tap to change without wiping your plan</span>'
-          : 'Training days <span style="font-weight:400;text-transform:none;letter-spacing:0"> — tap to toggle · max ' + maxDays + '</span>'}
+          : 'Training days <span style="font-weight:400;text-transform:none;letter-spacing:0"> — tap to toggle</span>'}
       </div>
       <div style="font-size:0.68rem;color:var(--muted);margin-bottom:6px">From: <b style="color:var(--text)">${planName}</b></div>
       <div style="display:flex;gap:5px">
@@ -15611,8 +15656,8 @@ function renderWeekPlanner() {
             dtype = dayTypes[i];
           }
           const icon = typeIcon[dtype] || '😴';
-          const atCap = !confirmed && !isTrain && state.trainingDays.length >= maxDays;
-          const canClick = !isPast && (confirmed || (!atCap));
+          const atCap = false; // no cap — rolling cycles can have any number of sessions
+          const canClick = !isPast && (confirmed || true);
           const clickFn = confirmed
             ? 'cyclePlanDayType(' + i + ')'
             : (canClick ? 'togglePlannerDay(' + i + ')' : '');
@@ -15622,7 +15667,7 @@ function renderWeekPlanner() {
           return `<div onclick="${clickFn}"
             style="flex:1;padding:6px 0;border-radius:8px;text-align:center;cursor:${isPast?'default':canClick?'pointer':'not-allowed'};
               border:1px solid ${borderCol};background:${bgCol};
-              opacity:${isPast?'0.25':atCap?'0.35':'1'};transition:all 0.15s">
+              opacity:${isPast?'0.25':'1'};transition:all 0.15s">
             <div style="font-size:0.65rem;font-weight:700;color:${textCol}">${d}</div>
             <div style="font-size:0.75rem;margin-top:1px">${isPast ? '✕' : icon}</div>
           </div>`;
@@ -16470,6 +16515,8 @@ function load() {
       });
     }
   } catch(e){}
+  // Prune workout log keys older than 8 weeks to prevent localStorage bloat
+  try { pruneOldWorkoutLogs(); } catch(e){}
 }
 
 // ============ SETTINGS & PREFERENCES ============
@@ -17725,6 +17772,64 @@ async function generateAIPlan(context) {
       ).join('\n')}\nThe macro targets below have already had these staple meals subtracted. Only generate the REMAINING meals.`
     : '';
 
+  // Build dynamic day-type and training-focus lines from the user's actual confirmed plan
+  const dayNames7 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayNamesFull = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const weekKeyForPlan = getWeekKey();
+  const confirmedPlanData = (nutrPlanConfirmed[currentProfile] || {})[weekKeyForPlan];
+  const activePlanForMeal = getActivePlan(currentProfile);
+
+  // Determine day types: prefer confirmed nutrition plan training days, fall back to active workout plan schedule
+  let dayTypeMap = {}; // 0-6 index → 'training'|'recovery'|'cardio'|'rest'
+  if (confirmedPlanData && confirmedPlanData.trainingDays && confirmedPlanData.trainingDays.length) {
+    // User explicitly set training days in the week planner
+    for (let i = 0; i < 7; i++) {
+      if (confirmedPlanData.trainingDays.includes(i)) {
+        dayTypeMap[i] = 'training';
+      } else {
+        // Check if the active plan marks this day as cardio
+        const schedDay = activePlanForMeal && activePlanForMeal.schedule
+          ? activePlanForMeal.schedule.find(d => d.day === dayNames7[i])
+          : null;
+        dayTypeMap[i] = (schedDay && schedDay.type === 'cardio') ? 'cardio' : 'rest';
+      }
+    }
+  } else if (activePlanForMeal && activePlanForMeal.schedule) {
+    activePlanForMeal.schedule.forEach((d, i) => {
+      dayTypeMap[i] = d.type || 'rest';
+    });
+  } else {
+    // No plan at all — generic 4-day recomp default
+    [0,1,3,4].forEach(i => { dayTypeMap[i] = 'training'; });
+    [2,5,6].forEach(i => { dayTypeMap[i] = 'rest'; });
+  }
+
+  // Add a recovery day adjacent to back-to-back training days where possible
+  for (let i = 1; i < 6; i++) {
+    if (dayTypeMap[i] === 'rest' && dayTypeMap[i-1] === 'training' && dayTypeMap[i+1] === 'training') {
+      dayTypeMap[i] = 'recovery';
+    }
+  }
+
+  const dayTypeLine = dayNames7.map((d, i) => `${d}=${dayTypeMap[i] || 'rest'}`).join(', ');
+
+  // Build training-day focus line from active plan session names
+  const focusParts = [];
+  if (activePlanForMeal && activePlanForMeal.schedule) {
+    activePlanForMeal.schedule.forEach((d, i) => {
+      if (dayTypeMap[i] === 'training') {
+        const sessionName = d.name || d.workoutName || d.day || dayNamesFull[i];
+        focusParts.push(`${dayNames7[i]}=${sessionName}`);
+      }
+    });
+  } else {
+    // No plan — generic labels
+    Object.keys(dayTypeMap).forEach(i => {
+      if (dayTypeMap[i] === 'training') focusParts.push(`${dayNames7[i]}=Training`);
+    });
+  }
+  const focusLine = focusParts.length ? focusParts.join(', ') : 'See training days above';
+
   const prompt = `You are an expert sports nutritionist and body recomposition specialist. Create a personalised 7-day meal plan.
 
 USER PROFILE:
@@ -17751,8 +17856,8 @@ ${mustIncludeRecipesStr}
 ${staplePromptStr ? staplePromptStr + '\n\n' : ''}PLAN REQUIREMENTS:
 1. Generate exactly 7 days: Monday through Sunday
 2. Each day must have EXACTLY ${prefs.mealCount} meals
-3. Day types: Mon=training, Tue=training, Wed=recovery, Thu=training, Fri=training, Sat=cardio, Sun=rest
-4. Training day focus: Mon=Upper Body, Tue=Lower Body, Thu=Upper Body B, Fri=Lower Body B
+3. Day types: ${dayTypeLine}
+4. Training day focus: ${focusLine}
 5. Hit calorie AND protein targets every single day — check your numbers before responding
 6. ${mealSelectionRule}
 7. BUDGET ENFORCEMENT — Every meal has a cost_p (pence). Sum of all cost_p values across the week MUST stay within weekly budget. If no budget is set, prefer lower-cost options where macros allow.
@@ -17776,7 +17881,7 @@ Respond ONLY with a valid JSON array. No explanation, no markdown, no backticks.
   {
     "day": "Monday",
     "type": "training",
-    "focus": "Upper Body A",
+    "focus": "session name from your plan (e.g. Upper Body A)",
     "meals": [
       {"name": "Breakfast", "food": "full description with amounts", "protein": 35, "calories": 520, "carbs": 55, "fat": 18, "cost_p": 85},
       ...
@@ -17928,6 +18033,7 @@ function applyAIPlan() {
 
   pendingAIPlan = null;
   saveAll();
+  renderWorkoutDayNav();
   showToast('✅ AI plan confirmed — your shopping list is ready in Shop');
   showPage('ai', document.querySelectorAll('.nav-item')[5]);
   setTimeout(function() { renderWeekPlanner(); }, 200);
@@ -17986,11 +18092,33 @@ function getWorkoutForDayFromPlan(profile, dayIdx) {
   const plan = getActivePlan(profile);
   if (!plan) return null;
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const weekKey = getWeekKey();
+  const weekKey = getWeekKey(currentWorkoutDate);
   const swapKey = profile + '_' + weekKey + '_' + dayIdx;
   const swappedFromIdx = sessionDaySwaps[swapKey];
   if (swappedFromIdx === -1) return null;
   const effectiveDayIdx = (swappedFromIdx !== undefined) ? swappedFromIdx : dayIdx;
+
+  // If this week has a confirmed nutrition plan, use positional mapping:
+  // the Nth confirmed training day gets the Nth training session from the plan schedule.
+  // This lets users pick any days (e.g. Tue-Fri) and get Push/Pull/Legs in correct order
+  // rather than being locked to the plan's default Mon/Tue/Wed assignments.
+  const confirmedWeek = (nutrPlanConfirmed[profile] || {})[weekKey];
+  if (confirmedWeek?.confirmed) {
+    const confirmedTrainingDays = confirmedWeek.trainingDays || [];
+    const sortedTrainingDays = [...confirmedTrainingDays].sort((a, b) => a - b);
+    const positionInWeek = sortedTrainingDays.indexOf(effectiveDayIdx);
+    if (positionInWeek === -1) {
+      // This day is not a training day in the confirmed plan — rest day
+      return null;
+    }
+    // Get the Nth training session from the plan (in the order they appear in the schedule)
+    const planTrainingSessions = plan.schedule.filter(d => d.type === 'training');
+    const session = planTrainingSessions[positionInWeek % planTrainingSessions.length];
+    if (!session) return null;
+    return session;
+  }
+
+  // No confirmed nutrition plan — fall back to static schedule lookup by day name
   const dayName = days[effectiveDayIdx];
   const dayPlan = plan.schedule.find(d => d.day === dayName);
   if (!dayPlan) return null;
@@ -19810,7 +19938,7 @@ function renderWorkoutFromPlan(idx) {
   renderWeekFeedbackBanner();
   const plan = getActivePlan(currentProfile);
   const workout = getWorkoutForDayFromPlan(currentProfile, idx);
-  const wKey = currentProfile + '_' + idx;
+  const wKey = getWorkoutWeekKey(currentProfile, idx);
   const content = document.getElementById('workout-content');
   const subtitle = document.getElementById('workout-subtitle');
   const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -19882,7 +20010,7 @@ function renderWorkoutFromPlan(idx) {
         + '<span>💪</span> Feeling it? Log a workout</button>';
 
     var heroHtml = '<div class="workout-hero">'
-      + '<div class="workout-title">' + dayName + ' — ' + (dayPlan && dayPlan.name ? dayPlan.name : 'Rest Day') + '</div>'
+      + '<div class="workout-title">' + dayName + ' — Rest Day</div>'
       + '<div class="workout-subtitle" style="margin-top:8px">Recovery, movement and nutrition today.</div>'
       + '</div>';
 
